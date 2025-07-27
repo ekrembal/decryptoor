@@ -1,67 +1,113 @@
-import { encrypt, getEncryptionPublicKey, decrypt } from '@metamask/eth-sig-util';
+import { x25519 } from '@noble/curves/ed25519';
+import { randomBytes } from '@stablelib/random';
+import { XChaCha20Poly1305 } from '@stablelib/xchacha20poly1305';
 import { keccak256 } from 'viem';
 
-export const EIP712_DOMAIN = {
+const EIP712_DOMAIN = {
   name: 'Encryption Key Generator',
   version: '1',
+  chainId: 1,
 } as const;
 
-export const KEY_GENERATION_TYPE = {
+const KEY_GENERATION_TYPE = {
   KeyGeneration: [
     { name: 'purpose', type: 'string' },
   ],
 } as const;
 
-export interface KeyPair {
-  publicKey: string;
-  privateKey: string;
-}
-
-export async function generateKeyPair(signMessage: (message: any) => Promise<string>): Promise<KeyPair> {
-  // Create EIP-712 signature for key generation
+// Generate a long-term keypair from an EIP-712 signature
+export async function generateKeyPair(signMessage: (message: any) => Promise<string>) {
+  // Get signature using EIP-712
   const signature = await signMessage({
     domain: EIP712_DOMAIN,
     types: KEY_GENERATION_TYPE,
     primaryType: 'KeyGeneration',
     message: {
-      purpose: 'Sign this message to generate your encryption private key',
+      purpose: 'Sign this message to generate your encryption key',
     },
   });
 
-  // Hash the signature to get a 32-byte private key
+  // Hash the signature to get a deterministic seed
   const hash = keccak256(signature as `0x${string}`);
-  const privateKey = hash.slice(2); // Remove 0x prefix
+  const seed = Buffer.from(hash.slice(2), 'hex');
 
-  // Generate the public key using eth-sig-util
-  const publicKey = getEncryptionPublicKey(privateKey);
+  // Use the seed as private key (it's already 32 random bytes)
+  // x25519 requires the private key to have certain bits set/cleared
+  const privateKey = x25519.utils.randomPrivateKey();
+  privateKey.set(seed.slice(0, 32));
+  privateKey[0] &= 248;
+  privateKey[31] &= 127;
+  privateKey[31] |= 64;
+
+  const publicKey = x25519.getPublicKey(privateKey);
 
   return {
-    publicKey,
-    privateKey
+    publicKey: Buffer.from(publicKey).toString('hex'),
+    privateKey: Buffer.from(privateKey).toString('hex'),
   };
 }
 
-export function encryptMessage(publicKey: string, message: string) {
-  const encryptedData = encrypt({
-    publicKey,
-    data: message,
-    version: 'x25519-xsalsa20-poly1305'
-  });
+// Encrypt a message using recipient's public key
+export function encryptMessage(recipientPublicKeyHex: string, message: string): string {
+  const recipientPublicKey = Uint8Array.from(Buffer.from(recipientPublicKeyHex, 'hex'));
 
-  // Convert to hex string for transport
-  return '0x' + Buffer.from(JSON.stringify(encryptedData), 'utf8').toString('hex');
+  // Generate ephemeral keypair for this encryption
+  const ephemeralPrivate = x25519.utils.randomPrivateKey();
+  const ephemeralPublic = x25519.getPublicKey(ephemeralPrivate);
+
+  // Derive shared secret using ECDH
+  const sharedSecret = x25519.scalarMult(ephemeralPrivate, recipientPublicKey);
+
+  // Encrypt using XChaCha20-Poly1305
+  const nonce = randomBytes(24);
+  const cipher = new XChaCha20Poly1305(sharedSecret);
+  const messageBytes = new TextEncoder().encode(message);
+  const ciphertext = cipher.seal(nonce, messageBytes);
+
+  // Combine ephemeralPublic + nonce + ciphertext
+  const combined = new Uint8Array(ephemeralPublic.length + nonce.length + ciphertext.length);
+  combined.set(ephemeralPublic);
+  combined.set(nonce, ephemeralPublic.length);
+  combined.set(ciphertext, ephemeralPublic.length + nonce.length);
+
+  return '0x' + Buffer.from(combined).toString('hex');
 }
 
-export function decryptMessage(privateKey: string, encryptedMessage: string): string {
-  // Remove 0x prefix if present
-  const hexData = encryptedMessage.startsWith('0x') ? encryptedMessage.slice(2) : encryptedMessage;
+// Decrypt a message using recipient's private key
+export function decryptMessage(recipientPrivateKeyHex: string, encrypted: string): string {
+  if (!encrypted.startsWith('0x')) {
+    throw new Error('Encrypted message must start with 0x');
+  }
+
+  const bytes = Buffer.from(encrypted.slice(2), 'hex');
   
-  // Convert hex string back to encrypted data
-  const encryptedData = JSON.parse(Buffer.from(hexData, 'hex').toString('utf8'));
-  
-  // Decrypt using eth-sig-util
-  return decrypt({
-    encryptedData,
-    privateKey
-  });
+  // Split the combined data
+  const ephemeralPublic = bytes.slice(0, 32);
+  const nonce = bytes.slice(32, 56);
+  const ciphertext = bytes.slice(56);
+
+  // Convert private key from hex
+  const recipientPrivate = Uint8Array.from(Buffer.from(recipientPrivateKeyHex, 'hex'));
+
+  // Derive the same shared secret
+  const sharedSecret = x25519.scalarMult(recipientPrivate, ephemeralPublic);
+  const cipher = new XChaCha20Poly1305(sharedSecret);
+
+  // Decrypt
+  const decrypted = cipher.open(nonce, ciphertext);
+  if (!decrypted) {
+    throw new Error('Decryption failed - invalid ciphertext or wrong key');
+  }
+
+  return new TextDecoder().decode(decrypted);
+}
+
+// Generate a random keypair (for testing)
+export function generateRandomKeyPair() {
+  const privateKey = x25519.utils.randomPrivateKey();
+  const publicKey = x25519.getPublicKey(privateKey);
+  return {
+    publicKey: Buffer.from(publicKey).toString('hex'),
+    privateKey: Buffer.from(privateKey).toString('hex'),
+  };
 } 

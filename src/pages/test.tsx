@@ -4,30 +4,12 @@ import Head from 'next/head';
 import { useState } from 'react';
 import styles from '../styles/Home.module.css';
 import { useAccount, useSignTypedData } from 'wagmi';
-import { encrypt, getEncryptionPublicKey, decrypt } from '@metamask/eth-sig-util';
-import { keccak256 } from 'viem';
+import { generateKeyPair, encryptMessage, decryptMessage, generateRandomKeyPair } from '@/utils/encryption';
 
 const TEST_MESSAGE = 'Hello world!';
 
-const EIP712_DOMAIN = {
-  name: 'Encryption Key Generator',
-  version: '1',
-  chainId: 1, // Mainnet, but it doesn't matter for this use case
-} as const;
-
-const KEY_GENERATION_TYPE = {
-  KeyGeneration: [
-    { name: 'purpose', type: 'string' },
-  ],
-} as const;
-
-interface TestResult {
-  step: string;
-  data: string;
-}
-
 const Test: NextPage = () => {
-  const [results, setResults] = useState<TestResult[]>([]);
+  const [results, setResults] = useState<Array<{ step: string; data: string }>>([]);
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const { address } = useAccount();
@@ -35,30 +17,6 @@ const Test: NextPage = () => {
 
   const addResult = (step: string, data: string) => {
     setResults(prev => [...prev, { step, data }]);
-  };
-
-  const generateKeyPair = async () => {
-    // Create EIP-712 signature for key generation
-    const signature = await signTypedDataAsync({
-      domain: EIP712_DOMAIN,
-      types: KEY_GENERATION_TYPE,
-      primaryType: 'KeyGeneration',
-      message: {
-        purpose: 'Sign this message to generate your encryption key',
-      },
-    });
-
-    // Hash the signature to get a 32-byte private key
-    const hash = keccak256(signature as `0x${string}`);
-    const privateKey = hash.slice(2); // Remove 0x prefix
-
-    // Generate the public key using eth-sig-util
-    const publicKey = getEncryptionPublicKey(privateKey);
-
-    return {
-      publicKey,
-      privateKey
-    };
   };
 
   const runTest = async () => {
@@ -71,56 +29,48 @@ const Test: NextPage = () => {
         throw new Error('Please connect your wallet first!');
       }
 
-      // Step 1: Generate key pair from signature
-      addResult('1. Generating key pair...', '');
-      const keyPair = await generateKeyPair();
-      addResult('Key Pair Generated', 
-        `Public Key: ${keyPair.publicKey}\nPrivate Key: ${keyPair.privateKey}`);
+      // Step 1: Generate Alice's key pair from signature
+      addResult('1. Generating Alice\'s key pair...', '');
+      const aliceKeyPair = await generateKeyPair(signTypedDataAsync);
+      addResult('Alice\'s Key Pair Generated', 
+        `Public Key: ${aliceKeyPair.publicKey}\nPrivate Key: ${aliceKeyPair.privateKey}`);
 
-      // Step 2: Encrypt message
-      addResult('2. Encrypting message...', `Message to encrypt: "${TEST_MESSAGE}"`);
-      const encryptedData = encrypt({
-        publicKey: keyPair.publicKey,
-        data: TEST_MESSAGE,
-        version: 'x25519-xsalsa20-poly1305'
-      });
-      addResult('Raw Encrypted Data', JSON.stringify(encryptedData, null, 2));
+      // Step 2: Generate Bob's random key pair (simulating another user)
+      addResult('2. Generating Bob\'s key pair...', '');
+      const bobKeyPair = generateRandomKeyPair();
+      addResult('Bob\'s Key Pair Generated',
+        `Public Key: ${bobKeyPair.publicKey}\nPrivate Key: ${bobKeyPair.privateKey}`);
 
-      // Step 3: Convert to hex
-      const hexMessage = '0x' + Buffer.from(JSON.stringify(encryptedData), 'utf8').toString('hex');
-      addResult('Hex Encoded Message', hexMessage);
+      // Step 3: Bob encrypts a message for Alice
+      addResult('3. Bob encrypting message for Alice...', `Message to encrypt: "${TEST_MESSAGE}"`);
+      const encryptedForAlice = encryptMessage(aliceKeyPair.publicKey, TEST_MESSAGE);
+      addResult('Encrypted Message (from Bob to Alice)', encryptedForAlice);
 
-      // Step 4: Decrypt using the same key
-      addResult('4. Decrypting message...', '');
-      
-      // Generate the same key pair again by signing the same message
-      const decryptKeyPair = await generateKeyPair();
-      
-      // Verify we got the same keys
-      if (decryptKeyPair.publicKey !== keyPair.publicKey) {
-        throw new Error('Key regeneration failed - got different key');
-      }
+      // Step 4: Alice decrypts Bob's message
+      addResult('4. Alice decrypting Bob\'s message...', '');
+      const decryptedByAlice = decryptMessage(aliceKeyPair.privateKey, encryptedForAlice);
+      addResult('Decrypted by Alice', decryptedByAlice);
 
-      // Convert hex message back to encrypted data
-      const encryptedMessage = JSON.parse(Buffer.from(hexMessage.slice(2), 'hex').toString('utf8'));
-      
-      // Decrypt using eth-sig-util
-      const decryptedMessage = decrypt({
-        encryptedData: encryptedMessage,
-        privateKey: decryptKeyPair.privateKey
-      });
+      // Step 5: Alice encrypts a reply for Bob
+      const REPLY_MESSAGE = 'Hello Bob, got your message!';
+      addResult('5. Alice encrypting reply for Bob...', `Reply message: "${REPLY_MESSAGE}"`);
+      const encryptedForBob = encryptMessage(bobKeyPair.publicKey, REPLY_MESSAGE);
+      addResult('Encrypted Reply (from Alice to Bob)', encryptedForBob);
 
-      addResult('Decrypted Message', decryptedMessage);
+      // Step 6: Bob decrypts Alice's reply
+      addResult('6. Bob decrypting Alice\'s reply...', '');
+      const decryptedByBob = decryptMessage(bobKeyPair.privateKey, encryptedForBob);
+      addResult('Decrypted by Bob', decryptedByBob);
 
       // Verify
-      if (decryptedMessage === TEST_MESSAGE) {
-        addResult('✅ Test Result', 'Success! Original message was correctly decrypted.');
+      if (decryptedByAlice === TEST_MESSAGE && decryptedByBob === REPLY_MESSAGE) {
+        addResult('✅ Test Result', 'Success! Both messages were correctly encrypted and decrypted.');
       } else {
-        addResult('❌ Test Result', `Failed! Expected "${TEST_MESSAGE}" but got "${decryptedMessage}"`);
+        throw new Error('Test failed - decrypted messages don\'t match originals');
       }
 
-    } catch (err: any) {
-      setError(err.message || 'Test failed');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Test failed');
     } finally {
       setIsLoading(false);
     }
@@ -130,14 +80,14 @@ const Test: NextPage = () => {
     <div className={styles.container}>
       <Head>
         <title>Encryption Test - RainbowKit App</title>
-        <meta content="Test MetaMask encryption/decryption" name="description" />
+        <meta content="Test asymmetric encryption/decryption" name="description" />
         <link href="/favicon.ico" rel="icon" />
       </Head>
 
       <main className={styles.main}>
         <ConnectButton />
 
-        <h1 className={styles.title}>Encryption Test</h1>
+        <h1 className={styles.title}>Asymmetric Encryption Test</h1>
 
         <div style={{ width: '100%', maxWidth: '800px', margin: '2rem 0' }}>
           <button
