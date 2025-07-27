@@ -1,3 +1,5 @@
+'use client';
+
 import { ConnectButton } from '@rainbow-me/rainbowkit';
 import type { NextPage } from 'next';
 import Head from 'next/head';
@@ -10,7 +12,7 @@ const Home: NextPage = () => {
       <Head>
         <title>Encryption/Decryption App</title>
         <meta
-          content="Encrypt and decrypt your text"
+          content="Secure message encryption using X25519-XChaCha20-Poly1305"
           name="description"
         />
         <link href="/favicon.ico" rel="icon" />
@@ -20,16 +22,51 @@ const Home: NextPage = () => {
         <ConnectButton />
 
         <h1 className={styles.title}>
-          Welcome to the Encryption/Decryption App
+          Secure Message Encryption
         </h1>
+
+        <p style={{
+          textAlign: 'center',
+          maxWidth: '800px',
+          margin: '2rem auto',
+          color: '#666',
+          lineHeight: '1.6'
+        }}>
+          This app uses state-of-the-art cryptography to secure your messages:
+        </p>
+
+        <div style={{
+          maxWidth: '800px',
+          margin: '0 auto 2rem',
+          padding: '1.5rem',
+          backgroundColor: '#f8f9fa',
+          borderRadius: '10px',
+          color: '#333'
+        }}>
+          <h3 style={{ marginTop: 0 }}>🔐 Encryption Protocol</h3>
+          <ul style={{ lineHeight: '1.6' }}>
+            <li><strong>Key Generation:</strong> X25519 elliptic curve for key pairs</li>
+            <li><strong>Key Agreement:</strong> ECDH (Elliptic Curve Diffie-Hellman) with ephemeral keys</li>
+            <li><strong>Encryption:</strong> XChaCha20-Poly1305 AEAD</li>
+            <li><strong>Forward Secrecy:</strong> Achieved through ephemeral keys for each message</li>
+            <li><strong>Identity Binding:</strong> EIP-712 signatures for deriving persistent keys</li>
+          </ul>
+
+          <h3>🛡️ Security Features</h3>
+          <ul style={{ lineHeight: '1.6' }}>
+            <li><strong>Asymmetric Encryption:</strong> Messages can only be decrypted by the intended recipient</li>
+            <li><strong>Authentication:</strong> Poly1305 ensures message integrity and authenticity</li>
+            <li><strong>Forward Secrecy:</strong> Compromising one message doesn&apos;t expose others</li>
+            <li><strong>Quantum Resistance:</strong> XChaCha20 is considered quantum-computing resistant</li>
+          </ul>
+        </div>
 
         <div style={{ 
           display: 'grid',
           gridTemplateColumns: 'repeat(2, 1fr)',
           gap: '2rem',
           width: '100%',
-          maxWidth: '800px',
-          marginTop: '2rem'
+          maxWidth: '800px'
         }}>
           <Link 
             href="/get-public-key" 
@@ -50,7 +87,7 @@ const Home: NextPage = () => {
             <div>
               <h2 style={{ margin: '0 0 1rem 0' }}>Get Public Key &rarr;</h2>
               <p style={{ margin: '0', fontSize: '1.1rem', lineHeight: '1.5' }}>
-                Generate your encryption public key to receive encrypted messages.
+                Generate your X25519 public key by signing an EIP-712 message. Share this key with others so they can send you encrypted messages.
               </p>
             </div>
           </Link>
@@ -74,7 +111,7 @@ const Home: NextPage = () => {
             <div>
               <h2 style={{ margin: '0 0 1rem 0' }}>Encrypt &rarr;</h2>
               <p style={{ margin: '0', fontSize: '1.1rem', lineHeight: '1.5' }}>
-                Encrypt a message using someone&apos;s public key.
+                Encrypt a message using someone&apos;s public key. Uses ECDH key agreement and XChaCha20-Poly1305 for secure encryption.
               </p>
             </div>
           </Link>
@@ -98,7 +135,7 @@ const Home: NextPage = () => {
             <div>
               <h2 style={{ margin: '0 0 1rem 0' }}>Decrypt &rarr;</h2>
               <p style={{ margin: '0', fontSize: '1.1rem', lineHeight: '1.5' }}>
-                Decrypt messages that were encrypted for you.
+                Decrypt messages that were encrypted for you. Your private key is securely derived from your wallet signature.
               </p>
             </div>
           </Link>
@@ -123,10 +160,27 @@ const Home: NextPage = () => {
             <div>
               <h2 style={{ margin: '0 0 1rem 0' }}>Test Flow &rarr;</h2>
               <p style={{ margin: '0', fontSize: '1.1rem', lineHeight: '1.5' }}>
-                Test the complete encryption/decryption flow.
+                Test the complete encryption flow with a simulated conversation between two parties.
               </p>
             </div>
           </Link>
+        </div>
+
+        <div style={{
+          maxWidth: '800px',
+          margin: '2rem auto',
+          padding: '1.5rem',
+          backgroundColor: '#fff8e1',
+          borderRadius: '10px',
+          color: '#333'
+        }}>
+          <h3 style={{ marginTop: 0, color: '#f57c00' }}>⚠️ Important Security Notes</h3>
+          <ul style={{ lineHeight: '1.6' }}>
+            <li>Your private key is never stored or transmitted - it&apos;s derived from your wallet signature when needed</li>
+            <li>Each message uses a unique ephemeral key - even if one message is compromised, others remain secure</li>
+            <li>The encryption is done entirely in your browser - messages never touch our servers</li>
+            <li>Always verify you&apos;re using the correct public key for the intended recipient</li>
+          </ul>
         </div>
       </main>
 
