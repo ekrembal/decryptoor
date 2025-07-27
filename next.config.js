@@ -1,10 +1,11 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
-  webpack: (config) => {
-    config.externals.push('pino-pretty', 'lokijs', 'encoding');
-    return config;
-  },
+  transpilePackages: [
+    '@vanilla-extract/sprinkles',
+    '@vanilla-extract/css',
+    '@rainbow-me/rainbowkit'
+  ]
 };
 
 module.exports = nextConfig;
