@@ -74,7 +74,7 @@ const Home: NextPage = () => {
             <div>
               <h2 style={{ margin: '0 0 1rem 0' }}>Encrypt &rarr;</h2>
               <p style={{ margin: '0', fontSize: '1.1rem', lineHeight: '1.5' }}>
-                Encrypt a message using someone's public key.
+                Encrypt a message using someone&apos;s public key.
               </p>
             </div>
           </Link>

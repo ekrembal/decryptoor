@@ -24,7 +24,7 @@ const Encrypt: NextPage = () => {
         throw new Error('Please enter text to encrypt');
       }
       if (!publicKey) {
-        throw new Error('Please enter recipient\'s encryption public key');
+        throw new Error('Please enter recipient&apos;s encryption public key');
       }
 
       const encryptedMessage = encryptMessage(publicKey, text);
@@ -59,7 +59,7 @@ const Encrypt: NextPage = () => {
         <div style={{ width: '100%', maxWidth: '600px', margin: '2rem 0' }}>
           <div style={{ marginBottom: '1rem' }}>
             <label style={{ display: 'block', marginBottom: '0.5rem' }}>
-              Recipient's Encryption Public Key:
+              Recipient&apos;s Encryption Public Key:
             </label>
             <textarea
               value={publicKey}
