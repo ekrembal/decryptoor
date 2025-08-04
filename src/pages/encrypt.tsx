@@ -23,7 +23,10 @@ const Encrypt: NextPage = () => {
       setEncryptedText('');
 
       if (!text) {
-        throw new Error('Please enter text to encrypt');
+        throw new Error('Please enter hex string to encrypt');
+      }
+      if (!text.match(/^[0-9a-fA-F]*$/)) {
+        throw new Error('Input must be a hex string (0-9, a-f, A-F only)');
       }
       if (!publicKey) {
         throw new Error('Please enter recipient&apos;s encryption public key');
@@ -80,12 +83,12 @@ const Encrypt: NextPage = () => {
 
           <div style={{ marginBottom: '1rem' }}>
             <label style={{ display: 'block', marginBottom: '0.5rem' }}>
-              Text to Encrypt:
+              Hex String to Encrypt:
             </label>
             <textarea
               value={text}
               onChange={(e) => setText(e.target.value)}
-              placeholder="Enter text to encrypt..."
+              placeholder="Enter hex string to encrypt (0-9, a-f, A-F only)..."
               style={{
                 width: '100%',
                 minHeight: '150px',

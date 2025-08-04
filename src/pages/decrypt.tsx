@@ -33,9 +33,16 @@ const Decrypt: NextPage = () => {
       // Generate key pair from signature
       const keyPair = await generateKeyPair(signTypedDataAsync);
 
-      // Decrypt the message
-      const decryptedMessage = decryptMessage(keyPair.privateKey, text);
-      setDecryptedText(decryptedMessage);
+      // Split the input by newlines and decrypt each message
+      const messages = text.split('\n').filter(msg => msg.trim());
+      const decryptedMessages = messages.map(msg => {
+        try {
+          return decryptMessage(keyPair.privateKey, msg.trim());
+        } catch (err: any) {
+          return `Error decrypting message: ${err.message}`;
+        }
+      });
+      setDecryptedText(decryptedMessages.join('\n'));
     } catch (err: any) {
       if (err.code === 4001) {
         setError('Decryption was rejected. Please try again and approve the signature in your wallet.');

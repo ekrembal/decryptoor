@@ -48,7 +48,11 @@ export async function generateKeyPair(signMessage: (message: any) => Promise<str
 }
 
 // Encrypt a message using recipient's public key
-export function encryptMessage(recipientPublicKeyHex: string, message: string): string {
+export function encryptMessage(recipientPublicKeyHex: string, messageHex: string): string {
+  if (!messageHex.match(/^[0-9a-fA-F]*$/)) {
+    throw new Error('Message must be a hex string');
+  }
+
   const recipientPublicKey = Uint8Array.from(Buffer.from(recipientPublicKeyHex, 'hex'));
 
   // Generate ephemeral keypair for this encryption
@@ -61,7 +65,7 @@ export function encryptMessage(recipientPublicKeyHex: string, message: string): 
   // Encrypt using XChaCha20-Poly1305
   const nonce = randomBytes(24);
   const cipher = new XChaCha20Poly1305(sharedSecret);
-  const messageBytes = new TextEncoder().encode(message);
+  const messageBytes = Buffer.from(messageHex, 'hex');
   const ciphertext = cipher.seal(nonce, messageBytes);
 
   // Combine ephemeralPublic + nonce + ciphertext
@@ -70,16 +74,14 @@ export function encryptMessage(recipientPublicKeyHex: string, message: string): 
   combined.set(nonce, ephemeralPublic.length);
   combined.set(ciphertext, ephemeralPublic.length + nonce.length);
 
-  return '0x' + Buffer.from(combined).toString('hex');
+  return Buffer.from(combined).toString('hex');
 }
 
 // Decrypt a message using recipient's private key
 export function decryptMessage(recipientPrivateKeyHex: string, encrypted: string): string {
-  if (!encrypted.startsWith('0x')) {
-    throw new Error('Encrypted message must start with 0x');
-  }
-
-  const bytes = Buffer.from(encrypted.slice(2), 'hex');
+  // Remove '0x' prefix if present
+  const cleanHex = encrypted.startsWith('0x') ? encrypted.slice(2) : encrypted;
+  const bytes = Buffer.from(cleanHex, 'hex');
   
   // Split the combined data
   const ephemeralPublic = bytes.slice(0, 32);
@@ -99,7 +101,7 @@ export function decryptMessage(recipientPrivateKeyHex: string, encrypted: string
     throw new Error('Decryption failed - invalid ciphertext or wrong key');
   }
 
-  return new TextDecoder().decode(decrypted);
+  return Buffer.from(decrypted).toString('hex');
 }
 
 // Generate a random keypair (for testing)
